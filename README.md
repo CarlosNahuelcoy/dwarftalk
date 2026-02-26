@@ -144,13 +144,25 @@ This GameKey is tied to the original author's player2.game account and is requir
 
 ### Can I fork this project?
 
-✅ **Yes!** You can fork, modify, and redistribute this code freely.
+✅ **Yes, for contributions!** You can fork this project to:
+- Fix bugs
+- Add features
+- Submit pull requests
+- Improve the code
 
-✅ **You must keep the GameKey unchanged.**
+❌ **You CANNOT change the GameKey** - not even in your fork.
 
-✅ If you want to use your own player2.game account, create a separate project from scratch - don't fork this one.
+❌ **You CANNOT create a derivative mod** by forking and changing the GameKey.
 
-See [LICENSE](LICENSE) for full details.
+✅ **Want to make a similar mod with your own Player2 account?**
+   Create a NEW project from scratch - do NOT fork this one.
+
+**In summary:**
+- Fork to contribute → ✅ Allowed
+- Fork and change GameKey → ❌ Prohibited
+- Create your own mod from scratch → ✅ Allowed
+
+See [LICENSE](LICENSE) for full legal details.
 
 ---
 
