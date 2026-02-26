@@ -1,0 +1,94 @@
+=============================================================================
+  DWARFTALK - QUICK SETUP GUIDE
+=============================================================================
+
+AI-powered conversations for Dwarf Fortress
+Talk to dwarves • Watch them chat • Influence their behavior
+
+=============================================================================
+  REQUIREMENTS
+=============================================================================
+
+1. Dwarf Fortress (Steam)
+2. DFHack - https://store.steampowered.com/app/2346660/
+3. Player2 AI - https://player2.game
+
+=============================================================================
+  INSTALLATION
+=============================================================================
+
+STEP 1: SUBSCRIBE TO MOD
+--------
+✓ Subscribe on Steam Workshop
+  (You've probably already done this!)
+
+STEP 2: DOWNLOAD BRIDGE
+--------
+→ Go to: https://github.com/CarlosNahuelcoy/dwarftalk/releases/latest
+→ Download: dwarftalk_bridge.exe
+→ Place in: Steam/steamapps/common/Dwarf Fortress/
+
+STEP 3: ADD KEYBINDINGS (IMPORTANT!)
+--------
+→ Open: Dwarf Fortress/dfhack-config/init/dfhack.init
+→ Add at the end:
+
+  keybinding add Ctrl-T dwarftalk/chat_window
+  keybinding add Ctrl-Shift-S dwarftalk/settings_window
+
+→ Save and close
+
+STEP 4: RUN THE BRIDGE
+--------
+→ Double-click dwarftalk_bridge.exe
+→ Browser window will open showing status
+→ Keep it running!
+
+STEP 5: PLAY!
+--------
+→ Start Dwarf Fortress
+→ Load or create a fortress
+→ Select any dwarf
+→ Press Ctrl+T to chat!
+
+=============================================================================
+  USAGE
+=============================================================================
+
+CHAT WITH DWARF:
+  1. Click on a dwarf
+  2. Press Ctrl+T
+  3. Type your message
+  4. See their response!
+
+SETTINGS:
+  Press Ctrl+Shift+S
+
+CHECK STATUS:
+  DFHack console: dwarftalk/status
+
+=============================================================================
+  TROUBLESHOOTING
+=============================================================================
+
+NOTHING HAPPENS WHEN I PRESS CTRL+T?
+→ Did you add keybindings to dfhack.init? (Step 3)
+→ Is the dwarf selected?
+→ Is DFHack running?
+
+BRIDGE NOT FOUND ERROR?
+→ Make sure dwarftalk_bridge.exe is in DF root folder
+→ Run bridge before starting game
+
+PLAYER2 NOT RESPONDING?
+→ Is Player2 AI running?
+→ Check dashboard: http://localhost:4316
+
+=============================================================================
+  SUPPORT
+=============================================================================
+
+Full documentation: https://github.com/CarlosNahuelcoy/dwarftalk
+Report issues: https://github.com/CarlosNahuelcoy/dwarftalk/issues
+
+=============================================================================

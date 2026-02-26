@@ -9,7 +9,7 @@ AI-powered conversations for Dwarf Fortress. Talk to your dwarves, watch them ch
 - **Chat with individual dwarves** - Each dwarf has personality and memory
 - **NPC-to-NPC conversations** - Dwarves talk to each other autonomously
 - **Real in-game effects** - Your words affect dwarf moods and behavior
-- **Powered by Player2 AI** - Natural language understanding
+- **Powered by player2.game** - Natural language understanding
 
 ---
 
@@ -17,7 +17,7 @@ AI-powered conversations for Dwarf Fortress. Talk to your dwarves, watch them ch
 
 - **Dwarf Fortress** (Steam version)
 - **[DFHack](https://store.steampowered.com/app/2346660/DFHack__Dwarf_Fortress_Modding_Engine/)** - Modding engine
-- **[Player2 AI](https://player2.ai)** - AI platform
+- **[player2.game](https://player2.game)** - AI platform
 
 ---
 
@@ -96,7 +96,7 @@ dwarftalk/status
 - Run the bridge before starting the game
 
 **"Player2 not responding"**
-- Is Player2 AI running?
+- Is player2.game running?
 - Check bridge dashboard: http://localhost:4316
 
 **NPC conversations too frequent/rare**
@@ -124,7 +124,7 @@ This project is licensed under the MIT License **with one critical restriction**
 
 ### 🔒 Protected GameKey
 
-The Player2 AI Game Key embedded in this software:
+The player2.game Game Key embedded in this software:
 ```go
 GameKey = "019c23d7-e3e9-7381-b2bd-b186f184ac7b"
 ```
@@ -141,7 +141,7 @@ This includes:
 
 ### Why?
 
-This GameKey is tied to the original author's Player2 AI account and is required for the software to function properly.
+This GameKey is tied to the original author's player2.game account and is required for the software to function properly.
 
 ### Can I fork this project?
 
@@ -149,7 +149,7 @@ This GameKey is tied to the original author's Player2 AI account and is required
 
 ✅ **You must keep the GameKey unchanged.**
 
-✅ If you want to use your own Player2 AI account, create a separate project from scratch - don't fork this one.
+✅ If you want to use your own player2.game account, create a separate project from scratch - don't fork this one.
 
 See [LICENSE](LICENSE) for full details.
 
@@ -163,7 +163,7 @@ Issues and pull requests welcome (respecting the GameKey restriction).
 
 ## 🙏 Credits
 
-- **Player2 AI** - Natural language AI platform
+- **player2.game** - Natural language AI platform
 - **DFHack Team** - Modding framework
 - **Bay 12 Games** - Dwarf Fortress
 - **DF Community** - Inspiration and support
