@@ -58,15 +58,15 @@ keybinding add Alt-Shift-S dwarftalk/settings_window
 1. Run `dwarftalk_bridge.exe` (keep it open)
 2. Start Dwarf Fortress
 3. Load or create a fortress
-4. Select a dwarf and press `Ctrl+T`
+4. Press `Ctrl+T` to open the conversation window
 
 ---
 
 ## 🎮 Usage
 
 ### Chat with Dwarves
-1. Select a dwarf (click on them)
-2. Press `Ctrl+T` (or your custom keybinding)
+1. Press `Ctrl+T` to open the conversation window
+2. From there you can chat with any dwarf or view NPC conversation history
 3. Type your message
 4. See the dwarf's response and effects!
 
@@ -88,7 +88,6 @@ dwarftalk/status
 
 **"Nothing happens when I press Ctrl+T"**
 - Did you add the keybindings to `dfhack.init`? (See Step 3 above)
-- Is the dwarf selected? (click on them first)
 - Is DFHack installed and running?
 
 **"Bridge not found" error**
