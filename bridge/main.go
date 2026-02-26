@@ -16,16 +16,17 @@ import (
 )
 
 const (
-	Player2Endpoint = "http://127.0.0.1:4315"
+	Player2LocalEndpoint = "http://127.0.0.1:4315"
+	Player2APIEndpoint   = "https://api.player2.game/v1"
 	
 	// PROTECTED - DO NOT MODIFY
-	// This GameKey must remain unchanged in all versions, forks, and derivatives
-	GameKey = "019c23d7-e3e9-7381-b2bd-b186f184ac7b" // LEGALLY PROTECTED
+	// This GameClientID must remain unchanged in all versions, forks, and derivatives
+	GameClientID = "019c23d7-e3e9-7381-b2bd-b186f184ac7b" // LEGALLY PROTECTED
 	
-	ServerPort      = ":4316"
-	Timeout         = 30 * time.Second
-	Version         = "1.0.3"
-	PollInterval    = 500 * time.Millisecond
+	ServerPort   = ":4316"
+	Timeout      = 30 * time.Second
+	Version      = "1.0.4"
+	PollInterval = 500 * time.Millisecond
 )
 
 // DEBUG MODE - Set to true for detailed logging
@@ -58,6 +59,7 @@ var (
 	player2Status  = "Checking..."
 	tempDir        string
 	dfRootDir      string
+	userP2Key      = "" // User's authentication token
 )
 
 // Debug logger
@@ -68,6 +70,12 @@ func debugLog(format string, v ...interface{}) {
 }
 
 func main() {
+	// Verify GameClientID integrity
+	expectedKey := "019c23d7-e3e9-7381-b2bd-b186f184ac7b"
+	if GameClientID != expectedKey {
+		log.Fatal("ERROR: GameClientID has been modified. This violates the software license.")
+	}
+
 	log.Println("╔════════════════════════════════════════╗")
 	log.Println("║   DwarfTalk Bridge Server v" + Version + "   ║")
 	log.Println("║   File Polling Mode                    ║")
@@ -87,16 +95,30 @@ func main() {
 		log.Fatal("Failed to create directories:", err)
 	}
 
+	// Authenticate with Player2
+	log.Println("🔐 Authenticating with Player2...")
+	if err := authenticateUser(); err != nil {
+		log.Printf("⚠️  Authentication failed: %v", err)
+		log.Println("⚠️  Will retry authentication on first request")
+	} else {
+		log.Println("✓ Authentication successful")
+	}
+	log.Println()
+
+	// Start health check routine (every 60 seconds)
+	go healthCheckRoutine()
+
 	// Poll BOTH regular and NPC request files
 	go pollRequestFile()
-	go pollNPCRequestFile() // NEW: Separate polling for NPC requests
+	go pollNPCRequestFile()
 
 	http.HandleFunc("/", handleDashboard)
 	http.HandleFunc("/api/status", handleStatus)
 
+	// Check Player2 app status
 	go func() {
 		for {
-			checkPlayer2Status()
+			checkPlayer2AppStatus()
 			time.Sleep(5 * time.Second)
 		}
 	}()
@@ -109,7 +131,7 @@ func main() {
 	log.Println("✓ Server started successfully")
 	log.Println("✓ Dashboard: http://localhost:4316")
 	log.Println("✓ Monitoring request files in:", tempDir)
-	log.Println("✓ NPC request polling active") // NEW
+	log.Println("✓ Health check: Running every 60s")
 	if DEBUG_MODE {
 		log.Println("✓ DEBUG MODE: All requests/responses will be logged")
 	}
@@ -119,6 +141,91 @@ func main() {
 
 	if err := http.ListenAndServe(ServerPort, nil); err != nil {
 		log.Fatal("Server error:", err)
+	}
+}
+
+// Authenticate user and get p2Key
+func authenticateUser() error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	
+	url := fmt.Sprintf("%s/v1/login/web/%s", Player2LocalEndpoint, GameClientID)
+	debugLog("Authentication URL: %s", url)
+	
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Player2 app: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	debugLog("Auth response: %s", string(body))
+
+	var authData map[string]interface{}
+	if err := json.Unmarshal(body, &authData); err != nil {
+		return fmt.Errorf("invalid auth response: %v", err)
+	}
+
+	if p2Key, ok := authData["p2Key"].(string); ok && p2Key != "" {
+		userP2Key = p2Key
+		debugLog("Obtained p2Key: %s...%s", p2Key[:8], p2Key[len(p2Key)-8:])
+		return nil
+	}
+
+	return fmt.Errorf("no p2Key in response")
+}
+
+// Health check routine - runs every 60 seconds
+func healthCheckRoutine() {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	// First health check immediately
+	sendHealthCheck()
+
+	for range ticker.C {
+		sendHealthCheck()
+	}
+}
+
+// Send health check to Player2 API
+func sendHealthCheck() {
+	debugLog("Sending health check...")
+
+	// Re-authenticate if needed
+	if userP2Key == "" {
+		if err := authenticateUser(); err != nil {
+			debugLog("Health check skipped - authentication failed: %v", err)
+			return
+		}
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	
+	req, err := http.NewRequest("GET", Player2APIEndpoint+"/health", nil)
+	if err != nil {
+		debugLog("Failed to create health check request: %v", err)
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+userP2Key)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		debugLog("Health check failed: %v", err)
+		// Try to re-authenticate
+		userP2Key = ""
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		debugLog("✓ Health check successful (usage tracked)")
+	} else {
+		debugLog("Health check returned status %d", resp.StatusCode)
+		// Invalid token - re-authenticate next time
+		if resp.StatusCode == 401 {
+			userP2Key = ""
+		}
 	}
 }
 
@@ -248,34 +355,11 @@ func pollRequestFile() {
 		}
 
 		debugLog("Command: %s", req.Command)
-		if req.Command == "chat" {
-			debugLog("Messages payload size: %d bytes", len(req.Messages))
-			
-			// Parse messages to show structure
-			var messages []map[string]interface{}
-			if err := json.Unmarshal(req.Messages, &messages); err == nil {
-				debugLog("Number of messages: %d", len(messages))
-				for i, msg := range messages {
-					role := msg["role"]
-					content := msg["content"]
-					if contentStr, ok := content.(string); ok {
-						debugLog("  Message %d: role=%s, length=%d chars", i+1, role, len(contentStr))
-						if len(contentStr) > 200 {
-							debugLog("    Preview: %s...", contentStr[:200])
-						} else {
-							debugLog("    Content: %s", contentStr)
-						}
-					}
-				}
-			}
-		}
 
 		var resp Response
 		startTime := time.Now()
 
 		switch req.Command {
-		case "health":
-			resp = handleHealthCheck()
 		case "chat":
 			resp = handleChatRequest(req.Messages)
 		default:
@@ -289,17 +373,6 @@ func pollRequestFile() {
 		log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		log.Printf("📤 RESPONSE SENT (took %v)", elapsed)
 		log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		debugLog("Success: %v", resp.Success)
-		if resp.Success {
-			debugLog("Response length: %d chars", len(resp.Message))
-			if len(resp.Message) > 200 {
-				debugLog("Response preview: %s...", resp.Message[:200])
-			} else {
-				debugLog("Response: %s", resp.Message)
-			}
-		} else {
-			log.Printf("❌ ERROR: %s", resp.Message)
-		}
 		log.Println()
 	}
 }
@@ -309,40 +382,21 @@ func writeResponse(path string, resp Response) {
 	ioutil.WriteFile(path, data, 0644)
 }
 
-func handleHealthCheck() Response {
-	requestCounter++
-	lastActivity = "Health check"
-	debugLog("Processing health check...")
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(Player2Endpoint + "/v1/health")
-	if err != nil {
-		debugLog("Health check failed: %v", err)
-		return Response{Success: false, Message: "Player2 not running"}
-	}
-	defer resp.Body.Close()
-
-	body, _ := ioutil.ReadAll(resp.Body)
-	debugLog("Health response: %s", string(body))
-
-	var healthData map[string]interface{}
-	if err := json.Unmarshal(body, &healthData); err != nil {
-		return Response{Success: false, Message: "Invalid response"}
-	}
-
-	if _, ok := healthData["client_version"]; ok {
-		return Response{Success: true, Message: "Player2 is running"}
-	}
-
-	return Response{Success: false, Message: "Invalid response"}
-}
-
 func handleChatRequest(messages json.RawMessage) Response {
 	requestCounter++
 	lastActivity = "Chat request"
 	
 	log.Println("🤖 Processing chat request...")
-	debugLog("Creating Player2 API request...")
+
+	// Re-authenticate if needed
+	if userP2Key == "" {
+		log.Println("🔐 Re-authenticating...")
+		if err := authenticateUser(); err != nil {
+			log.Printf("❌ Authentication failed: %v", err)
+			return Response{Success: false, Message: "Authentication failed - is Player2 App running?"}
+		}
+		log.Println("✓ Re-authentication successful")
+	}
 
 	client := &http.Client{Timeout: Timeout}
 	payload := map[string]interface{}{"messages": json.RawMessage(messages)}
@@ -350,16 +404,16 @@ func handleChatRequest(messages json.RawMessage) Response {
 
 	debugLog("Payload size: %d bytes", len(payloadBytes))
 
-	httpReq, err := http.NewRequest("POST", Player2Endpoint+"/v1/chat/completions", bytes.NewBuffer(payloadBytes))
+	httpReq, err := http.NewRequest("POST", Player2APIEndpoint+"/chat/completions", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		log.Printf("❌ Failed to create request: %v", err)
 		return Response{Success: false, Message: "Failed to create request"}
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("player2-game-key", GameKey)
+	httpReq.Header.Set("Authorization", "Bearer "+userP2Key)
 
-	debugLog("Sending request to Player2...")
+	debugLog("Sending request to Player2 API...")
 	requestStart := time.Now()
 
 	resp, err := client.Do(httpReq)
@@ -380,36 +434,29 @@ func handleChatRequest(messages json.RawMessage) Response {
 
 	body, _ := ioutil.ReadAll(resp.Body)
 	debugLog("Response status: %d", resp.StatusCode)
-	debugLog("Response body size: %d bytes", len(body))
+
+	if resp.StatusCode == 401 {
+		log.Println("❌ Authentication expired - re-authenticating...")
+		userP2Key = ""
+		return Response{Success: false, Message: "Authentication expired - please try again"}
+	}
 
 	if resp.StatusCode != 200 {
 		log.Printf("❌ HTTP error %d from Player2", resp.StatusCode)
 		debugLog("Error response body: %s", string(body))
-		
-		var errorResp map[string]interface{}
-		if json.Unmarshal(body, &errorResp) == nil {
-			if errMsg, ok := errorResp["error"]; ok {
-				return Response{Success: false, Message: fmt.Sprintf("HTTP %d: %v", resp.StatusCode, errMsg)}
-			}
-		}
-		
 		return Response{Success: false, Message: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 	}
 
 	var apiResponse map[string]interface{}
 	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		log.Printf("❌ Failed to parse Player2 response: %v", err)
-		debugLog("Invalid JSON response: %s", string(body[:min(500, len(body))]))
 		return Response{Success: false, Message: "Invalid JSON response from Player2"}
 	}
-
-	debugLog("Parsed API response successfully")
 
 	// Extract content
 	choices, ok := apiResponse["choices"].([]interface{})
 	if !ok || len(choices) == 0 {
 		log.Println("❌ No choices in API response")
-		debugLog("API response structure: %+v", apiResponse)
 		return Response{Success: false, Message: "No response content from Player2"}
 	}
 
@@ -432,57 +479,8 @@ func handleChatRequest(messages json.RawMessage) Response {
 	}
 
 	log.Printf("✓ Chat response received: %d characters", len(content))
-	debugLog("Response content: %s", content)
-	
-	// ============================================================
-	// NUEVO: GUARDAR RESPUESTA RAW EN ARCHIVO PARA DEBUG
-	// ============================================================
-	rawResponsePath := filepath.Join(tempDir, "go_raw_response.txt")
-	if err := ioutil.WriteFile(rawResponsePath, []byte(content), 0644); err == nil {
-		log.Printf("✓ Saved raw response to: %s", rawResponsePath)
-	}
-	
-	// ============================================================
-	// NUEVO: ANALIZAR SI HAY ACTION EN LA RESPUESTA
-	// ============================================================
-	if strings.Contains(content, "ACTION:") {
-		log.Println("✅✅✅ DETECTED ACTION IN RESPONSE!")
-		
-		// Extraer la línea de ACTION
-		lines := strings.Split(content, "\n")
-		for i, line := range lines {
-			if strings.Contains(line, "ACTION:") {
-				log.Printf("  → Line %d: %s", i+1, line)
-				
-				// Intentar parsear el JSON
-				jsonStart := strings.Index(line, "{")
-				if jsonStart >= 0 {
-					jsonStr := line[jsonStart:]
-					var actionData map[string]interface{}
-					if err := json.Unmarshal([]byte(jsonStr), &actionData); err == nil {
-						log.Printf("  → Parsed action type: %v", actionData["type"])
-						log.Printf("  → Parsed action amount: %v", actionData["amount"])
-					} else {
-						log.Printf("  → ⚠️ Could not parse JSON: %v", err)
-					}
-				}
-			}
-		}
-	} else {
-		log.Println("⚠️ NO ACTION detected in response")
-	}
-	
-	// ============================================================
-	// NUEVO: LOG DEL RESPONSE.JSON QUE SE VA A ESCRIBIR
-	// ============================================================
-	finalResponse := Response{Success: true, Message: content}
-	responseJSON, _ := json.MarshalIndent(finalResponse, "", "  ")
-	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Println("📝 RESPONSE.JSON CONTENT:")
-	log.Println(string(responseJSON))
-	log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-	return finalResponse
+	return Response{Success: true, Message: content}
 }
 
 func min(a, b int) int {
@@ -492,13 +490,14 @@ func min(a, b int) int {
 	return b
 }
 
-func checkPlayer2Status() {
+// Check Player2 APP status (not API)
+func checkPlayer2AppStatus() {
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(Player2Endpoint + "/v1/health")
+	resp, err := client.Get(Player2LocalEndpoint + "/v1/health")
 
 	if err != nil {
 		player2OK = false
-		player2Status = "Not Running"
+		player2Status = "App Not Running"
 		return
 	}
 	defer resp.Body.Close()
@@ -509,7 +508,7 @@ func checkPlayer2Status() {
 	if err := json.Unmarshal(body, &healthData); err == nil {
 		if version, ok := healthData["client_version"]; ok {
 			player2OK = true
-			player2Status = fmt.Sprintf("Connected (v%v)", version)
+			player2Status = fmt.Sprintf("App Connected (v%v)", version)
 			return
 		}
 	}
@@ -553,16 +552,6 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
         }
         .header h1 { font-size: 2.5em; margin-bottom: 10px; }
         .header p { opacity: 0.9; font-size: 1.1em; }
-        .debug-badge {
-            background: #ffc107;
-            color: #000;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.8em;
-            font-weight: bold;
-            margin-top: 10px;
-            display: inline-block;
-        }
         .content { padding: 30px; }
         .status-grid {
             display: grid;
@@ -619,13 +608,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
         <div class="header">
             <h1>🏔️ DwarfTalk Bridge</h1>
             <p>AI-Powered Dwarf Conversations for Dwarf Fortress</p>
-            <small>File Polling Mode v` + Version + debugStatus + `</small>` +
-		(func() string {
-			if DEBUG_MODE {
-				return `<div class="debug-badge">🔍 DEBUG MODE ACTIVE - Check console for detailed logs</div>`
-			}
-			return ""
-		})() + `
+            <small>v` + Version + debugStatus + `</small>
         </div>
         
         <div class="content">
@@ -657,12 +640,12 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
             </div>
             
             <div class="minimize-hint">
-                ℹ️ Keep this window open or minimize it. The bridge monitors files automatically.
+                ℹ️ Keep this window open or minimize it while playing Dwarf Fortress.
             </div>
         </div>
         
         <div class="footer">
-            DwarfTalk Bridge v` + Version + ` | File Polling Mode
+            DwarfTalk Bridge v` + Version + `
         </div>
     </div>
     
