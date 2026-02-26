@@ -1,0 +1,8 @@
+[ID:Dwarftalk]
+[NUMERIC_VERSION:1]
+[DISPLAYED_VERSION:0.1.0]
+[EARLIEST_COMPATIBLE_NUMERIC_VERSION:1]
+[EARLIEST_COMPATIBLE_DISPLAYED_VERSION:0.1.0]
+[AUTHOR:Gerik Uylerk]
+[NAME:Dwarftalk]
+[DESCRIPTION:AI-powered dwarf conversations. Chat with dwarves using natural language, watch NPC-to-NPC dialogues, and influence fortress life through your interactions.]

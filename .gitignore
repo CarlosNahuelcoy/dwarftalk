@@ -1,0 +1,29 @@
+@"
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+go.work
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# DF temp
+dwarftalk_temp/
+dwarftalk_saves/
+dwarftalk_analysis/
+*.log
+"@ | Out-File -FilePath ".gitignore" -Encoding UTF8

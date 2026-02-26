@@ -1,0 +1,30 @@
+MIT License with GameKey Restriction
+
+Copyright (c) 2026 Gerik Uylerk
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software with the following restrictions:
+
+1. GAMEKEY RESTRICTION:
+   The Player2 AI Game Key value in this software:
+   
+   GameKey = "019c23d7-e3e9-7381-b2bd-b186f184ac7b"
+   
+   MUST NOT be modified, removed, or replaced under any circumstances.
+   This includes forks, derivatives, redistributions, and any other use
+   of this software. Any violation of this restriction voids all other
+   permissions granted by this license.
+
+2. Subject to the above restriction, you may:
+   - Use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+     copies of the Software
+   - Permit persons to whom the Software is furnished to do so
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

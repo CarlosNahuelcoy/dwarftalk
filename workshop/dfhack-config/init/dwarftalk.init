@@ -1,0 +1,20 @@
+# ============================================================================
+# DwarfTalk - AI-powered dwarf conversations
+# ============================================================================
+
+# Start systems on world load
+on-new-fortress dwarftalk/init
+on-load dwarftalk/init
+
+# Daemon check - monitors bridge connection
+repeat start dwarftalk_autostart 250 ticks dwarftalk/daemon_check
+
+# ============================================================================
+# KEYBINDINGS
+# ============================================================================
+# NOTE: Keybindings must be added to dfhack-config/init/dfhack.init
+# Add these lines to your dfhack.init file:
+#
+# keybinding add Ctrl-T dwarftalk/chat_window
+# keybinding add Ctrl-Shift-S dwarftalk/settings_window
+# ============================================================================
