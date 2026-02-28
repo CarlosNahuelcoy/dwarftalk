@@ -1,14 +1,11 @@
 # ============================================================================
 # DwarfTalk - AI-powered dwarf conversations
 # ============================================================================
-
-# Start systems on world load
+# Start systems on map load (fort mode)
 on-new-fortress dwarftalk/init
-on-load dwarftalk/init
-
+dwarftalk/init
 # Daemon check - monitors bridge connection
 repeat start dwarftalk_autostart 250 ticks dwarftalk/daemon_check
-
 # ============================================================================
 # KEYBINDINGS
 # ============================================================================
