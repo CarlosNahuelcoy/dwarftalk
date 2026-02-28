@@ -20,7 +20,9 @@ local player2_api = nil
 local api_load_error = nil
 
 -- Add scripts directory to Lua path
-local scripts_path = dfhack.getHackPath() .. '/scripts/dwarftalk/'
+local info = debug.getinfo(1, 'S')
+local current_script_path = info.source:match('@(.+)')
+local scripts_path = current_script_path:match('(.+)[/\\][^/\\]+$') .. '/'
 package.path = package.path .. ';' .. scripts_path .. '?.lua'
 
 local logger = require('debug_logger')
