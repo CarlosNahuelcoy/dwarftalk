@@ -24,7 +24,7 @@ AI-powered conversations for Dwarf Fortress. Talk to your dwarves, watch them ch
 ## 🚀 Quick Install
 
 ### Step 1: Subscribe on Steam Workshop
-✅ https://steamcommunity.com/sharedfiles/filedetails/?id=3673957650
+✅ [https://steamcommunity.com/sharedfiles/filedetails/?id=3673957650](https://steamcommunity.com/sharedfiles/filedetails/?id=3674915135)
 
 ### Step 2: Download the Bridge
 1. Go to [Releases](https://github.com/carlosnahuelcoy/dwarftalk/releases/latest)
