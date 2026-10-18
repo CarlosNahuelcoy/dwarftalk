@@ -1,9 +1,9 @@
-@"
 # Binaries
 *.exe
 *.dll
 *.so
 *.dylib
+bridge/dwarftalk_bridge
 
 # Go
 *.test
@@ -25,5 +25,6 @@ Thumbs.db
 dwarftalk_temp/
 dwarftalk_saves/
 dwarftalk_analysis/
+dwarftalk_config.json
 *.log
-"@ | Out-File -FilePath ".gitignore" -Encoding UTF8
+backups/

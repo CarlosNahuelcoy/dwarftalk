@@ -42,16 +42,17 @@ AI-powered conversations for Dwarf Fortress. Talk to your dwarves, watch them ch
 3. Add these lines at the end:
 ```
 # DwarfTalk keybindings
-keybinding add Ctrl-T dwarftalk/chat_window
-keybinding add Ctrl-Shift-S dwarftalk/settings_window
+keybinding add Ctrl-T@dwarfmode dwarftalk/chat_window
+keybinding add Alt-Shift-S@dwarfmode dwarftalk/settings_window
 ```
+(Ctrl-Shift-S is DFHack's built-in "spectate toggle", so settings uses Alt-Shift-S.)
 
 4. Save and close
 
 **Alternative keys if Ctrl-T is taken:**
 ```
-keybinding add Alt-T dwarftalk/chat_window
-keybinding add Alt-Shift-S dwarftalk/settings_window
+keybinding add Alt-T@dwarfmode dwarftalk/chat_window
+keybinding add Alt-Shift-S@dwarfmode dwarftalk/settings_window
 ```
 
 ### Step 4: Start Playing!
@@ -59,6 +60,38 @@ keybinding add Alt-Shift-S dwarftalk/settings_window
 2. Start Dwarf Fortress
 3. Load or create a fortress
 4. Press `Ctrl+T` to open the conversation window
+
+---
+
+## 🐧 Linux, and Claude as a provider
+
+The bridge builds and runs natively on Linux, and besides Player2 it can use Claude:
+
+- **Claude Code**: shells out to the `claude` CLI, so dwarves run on your Claude subscription. No API key.
+- **Anthropic API**: pay-as-you-go key from console.anthropic.com.
+
+Pick the provider on the bridge dashboard (http://localhost:4316). Player2 stays the default.
+
+```bash
+# 1. (Only for the Claude Code provider) install the CLI and log in once
+curl -fsSL https://claude.ai/install.sh | bash
+claude auth login
+
+# 2. Build the bridge (Go 1.25+)
+cd bridge && go build -o dwarftalk_bridge . && cd ..
+
+# 3. Hook the scripts + keybindings into Steam DFHack
+./install-linux.sh
+
+# 4. Run the bridge (keep it open), then launch the *DFHack* entry in Steam
+#    (launching plain "Dwarf Fortress" on Linux starts the game without DFHack)
+bridge/dwarftalk_bridge
+```
+
+In fort mode: **Ctrl-T** opens the chat, **Alt-Shift-S** opens settings
+(Ctrl-Shift-S is DFHack's spectate toggle). The bridge auto-detects the Steam DF and
+DFHack folders; override with `-df-dir "/path/to/Dwarf Fortress"`. For Claude Code,
+pick the model (haiku / sonnet / opus) on the dashboard.
 
 ---
 
@@ -71,7 +104,7 @@ keybinding add Alt-Shift-S dwarftalk/settings_window
 4. See the dwarf's response and effects!
 
 ### Access Settings
-- Press `Ctrl+Shift+S` to configure:
+- Press `Alt+Shift+S` to configure:
   - Conversation intervals
   - NPC chat frequency
   - Notification chances
@@ -99,7 +132,7 @@ dwarftalk/status
 - Check bridge dashboard: http://localhost:4316
 
 **NPC conversations too frequent/rare**
-- Adjust interval in Settings (`Ctrl+Shift+S`)
+- Adjust interval in Settings (`Alt+Shift+S`)
 - System uses probability - it's not exactly every X minutes
 
 ---
