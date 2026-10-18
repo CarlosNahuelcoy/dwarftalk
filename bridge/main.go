@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,6 +74,8 @@ type ProviderConfig struct {
 	CustomKey     string `json:"custom_key"`
 	Model         string `json:"model"`
 	Player2P2Key  string `json:"player2_p2key"`
+	AnthropicKey  string `json:"anthropic_key"`
+	ClaudePath    string `json:"claude_path"`
 }
 
 var defaultConfig = ProviderConfig{Provider: "player2"}
@@ -80,6 +84,10 @@ var configMu sync.Mutex
 
 func defaultModelForProvider(provider string) string {
 	switch provider {
+	case "claude_code":
+		return "haiku"
+	case "anthropic":
+		return "claude-haiku-5-5"
 	case "openai":
 		return "gpt-4o-mini"
 	case "openrouter":
@@ -105,6 +113,9 @@ func loadConfig() {
 		log.Println("  Could not parse config, using defaults:", err)
 		currentConfig = defaultConfig
 	} else {
+		if currentConfig.Provider == "" {
+			currentConfig.Provider = defaultConfig.Provider
+		}
 		log.Printf("  Config loaded — provider: %s", currentConfig.Provider)
 		if currentConfig.Player2P2Key != "" {
 			log.Println("  Player2 OAuth key loaded")
@@ -131,8 +142,9 @@ var (
 	lastActivity   = "Server started"
 	providerOK     = false
 	providerMsg    = "Checking..."
-	tempDir        string
-	dfRootDir      string
+	dfRootDir      string   // where dwarftalk_config.json lives (first watched dir)
+	watchDirs      []string // DF dirs whose dwarftalk_temp/ we poll
+	statsMu        sync.Mutex
 )
 
 // ============================================================
@@ -178,19 +190,32 @@ func main() {
 	log.Println("╚════════════════════════════════════════╝")
 	log.Println()
 
-	exePath, _ := os.Executable()
-	dfRootDir = filepath.Dir(exePath)
-	log.Println("Dwarf Fortress directory:", dfRootDir)
+	dfDirFlag := flag.String("df-dir", os.Getenv("DWARFTALK_DF_DIR"), "Dwarf Fortress directory (comma-separated for several); auto-detected if empty")
+	noBrowser := flag.Bool("no-browser", false, "don't open the dashboard in a browser on start")
+	flag.BoolVar(&DEBUG_MODE, "debug", false, "verbose logging")
+	flag.Parse()
+
+	watchDirs = detectDFDirs(*dfDirFlag)
+	if len(watchDirs) == 0 {
+		log.Fatal("Could not find a Dwarf Fortress directory. Pass -df-dir \"/path/to/Dwarf Fortress\"")
+	}
+	dfRootDir = watchDirs[0]
+	for _, d := range watchDirs {
+		log.Println("Watching DF directory:", d)
+	}
 	log.Println()
 
-	if err := setupDirectories(); err != nil {
-		log.Fatal("Failed to create directories:", err)
-	}
 	loadConfig()
 	log.Println()
-
-	go pollRequestFile()
-	go pollNPCRequestFile()
+	for _, d := range watchDirs {
+		tempDir, err := setupDirectories(d)
+		if err != nil {
+			log.Fatal("Failed to create directories:", err)
+		}
+		go pollRequestFile(tempDir)
+		go pollNPCRequestFile(tempDir)
+	}
+	log.Println()
 
 	http.HandleFunc("/", handleDashboard)
 	http.HandleFunc("/api/status", handleStatus)
@@ -206,10 +231,12 @@ func main() {
 		}
 	}()
 
-	go func() {
-		time.Sleep(1 * time.Second)
-		openBrowser("http://localhost:4316")
-	}()
+	if !*noBrowser {
+		go func() {
+			time.Sleep(1 * time.Second)
+			openBrowser("http://localhost:4316")
+		}()
+	}
 
 	log.Println("Server started — http://localhost:4316")
 	log.Printf("Active provider: %s", currentConfig.Provider)
@@ -217,7 +244,8 @@ func main() {
 	log.Println("Press Ctrl+C to stop")
 	log.Println()
 
-	if err := http.ListenAndServe(ServerPort, nil); err != nil {
+	// Bind to loopback only: the dashboard exposes API-key settings.
+	if err := http.ListenAndServe("127.0.0.1"+ServerPort, nil); err != nil {
 		log.Fatal("Server error:", err)
 	}
 }
@@ -226,7 +254,59 @@ func main() {
 // DIRECTORIOS
 // ============================================================
 
-func setupDirectories() error {
+// detectDFDirs returns the DF directories to watch. DFHack writes its
+// dwarftalk_temp/ under dfhack.getDFPath(), which (depending on how DF and
+// DFHack were launched) may be the DF dir or the Steam DFHack dir, so by
+// default we watch every plausible candidate.
+func detectDFDirs(explicit string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(d string) {
+		if d == "" || seen[d] {
+			return
+		}
+		if st, err := os.Stat(d); err == nil && st.IsDir() {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	if explicit != "" {
+		for _, d := range strings.Split(explicit, ",") {
+			add(strings.TrimSpace(d))
+		}
+		return out
+	}
+	looksLikeDF := func(d string) bool {
+		for _, f := range []string{"dwarfort", "Dwarf Fortress.exe", "hack", "dfhack-config"} {
+			if _, err := os.Stat(filepath.Join(d, f)); err == nil {
+				return true
+			}
+		}
+		return false
+	}
+	if exePath, err := os.Executable(); err == nil && looksLikeDF(filepath.Dir(exePath)) {
+		add(filepath.Dir(exePath))
+	}
+	home, _ := os.UserHomeDir()
+	for _, steam := range []string{
+		filepath.Join(home, ".local", "share", "Steam"),
+		filepath.Join(home, ".steam", "steam"),
+		filepath.Join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+		`C:\Program Files (x86)\Steam`,
+	} {
+		for _, app := range []string{"Dwarf Fortress", "DFHack"} {
+			d := filepath.Join(steam, "steamapps", "common", app)
+			if real, err := filepath.EvalSymlinks(d); err == nil {
+				d = real
+			}
+			add(d)
+		}
+	}
+	return out
+}
+
+func setupDirectories(root string) (string, error) {
+	var tempDir string
 	dirs := map[string]string{
 		"temp":     "dwarftalk_temp",
 		"saves":    "dwarftalk_saves",
@@ -234,10 +314,10 @@ func setupDirectories() error {
 	}
 	log.Println("Creating necessary directories...")
 	for name, dir := range dirs {
-		fullPath := filepath.Join(dfRootDir, dir)
+		fullPath := filepath.Join(root, dir)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			if err := os.MkdirAll(fullPath, 0755); err != nil {
-				return fmt.Errorf("failed to create %s: %v", name, err)
+				return "", fmt.Errorf("failed to create %s: %v", name, err)
 			}
 			log.Printf("  Created: %s", fullPath)
 		} else {
@@ -247,14 +327,14 @@ func setupDirectories() error {
 			tempDir = fullPath
 		}
 	}
-	return nil
+	return tempDir, nil
 }
 
 // ============================================================
 // POLLING DE ARCHIVOS
 // ============================================================
 
-func pollRequestFile() {
+func pollRequestFile(tempDir string) {
 	requestPath := filepath.Join(tempDir, "request.json")
 	responsePath := filepath.Join(tempDir, "response.json")
 	log.Println("Polling request files...")
@@ -290,7 +370,7 @@ func pollRequestFile() {
 	}
 }
 
-func pollNPCRequestFile() {
+func pollNPCRequestFile(tempDir string) {
 	requestPath := filepath.Join(tempDir, "npc_request.json")
 	responsePath := filepath.Join(tempDir, "npc_response.json")
 	log.Println("Polling NPC request files...")
@@ -324,9 +404,19 @@ func pollNPCRequestFile() {
 	}
 }
 
+// writeResponse writes atomically (tmp + rename) so the Lua poller never
+// reads a half-written file.
 func writeResponse(path string, resp Response) {
 	data, _ := json.Marshal(resp)
-	ioutil.WriteFile(path, data, 0644)
+	tmp := path + ".tmp"
+	if err := ioutil.WriteFile(tmp, data, 0644); err != nil {
+		log.Println("Failed to write response:", err)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(path)
+		os.Rename(tmp, path)
+	}
 }
 
 // ============================================================
@@ -334,10 +424,26 @@ func writeResponse(path string, resp Response) {
 // ============================================================
 
 func dispatchChat(messages json.RawMessage) Response {
+	statsMu.Lock()
 	requestCounter++
 	lastActivity = fmt.Sprintf("Chat via %s", currentConfig.Provider)
+	statsMu.Unlock()
 	log.Printf("🤖 Chat → %s", currentConfig.Provider)
+	resp := dispatchToProvider(messages)
+	if resp.Success {
+		resp.Message = cleanModelText(resp.Message)
+	} else {
+		log.Println("❌", resp.Message)
+	}
+	return resp
+}
+
+func dispatchToProvider(messages json.RawMessage) Response {
 	switch currentConfig.Provider {
+	case "claude_code":
+		return handleClaudeCodeChat(messages)
+	case "anthropic":
+		return handleAnthropicChat(messages)
 	case "player2":
 		return handlePlayer2Chat(messages)
 	case "openai":
@@ -836,6 +942,14 @@ func handleHealthCheck() Response {
 
 func checkProviderStatus() {
 	switch currentConfig.Provider {
+	case "claude_code":
+		providerOK, providerMsg = checkClaudeCodeStatus()
+	case "anthropic":
+		if currentConfig.AnthropicKey == "" && os.Getenv("ANTHROPIC_API_KEY") == "" {
+			providerOK = false; providerMsg = "No API key set"
+		} else {
+			providerOK = true; providerMsg = "Ready (model: " + resolveModel(currentConfig.Model, "anthropic") + ")"
+		}
 	case "player2":
 		checkPlayer2Status()
 	case "openai":
@@ -929,6 +1043,9 @@ func handleConfigEndpoint(w http.ResponseWriter, r *http.Request) {
 			"openai_key_hint":     keyHint(cfg.OpenAIKey),
 			"openrouter_key_hint": keyHint(cfg.OpenRouterKey),
 			"gemini_key_hint":     keyHint(cfg.GeminiKey),
+			"anthropic_key_hint":  keyHint(cfg.AnthropicKey),
+			"claude_path":         cfg.ClaudePath,
+			"claude_path_found":   findClaudeCLI(),
 			"custom_url":          cfg.CustomURL,
 			"custom_key_hint":     keyHint(cfg.CustomKey),
 			"player2_key_hint":    keyHint(cfg.Player2P2Key),
@@ -960,6 +1077,12 @@ func handleConfigEndpoint(w http.ResponseWriter, r *http.Request) {
 		if v, ok := incoming["gemini_key"]; ok && v != "" {
 			currentConfig.GeminiKey = v
 		}
+		if v, ok := incoming["anthropic_key"]; ok && v != "" {
+			currentConfig.AnthropicKey = v
+		}
+		if v, ok := incoming["claude_path"]; ok {
+			currentConfig.ClaudePath = v
+		}
 		if v, ok := incoming["custom_url"]; ok {
 			currentConfig.CustomURL = v
 		}
@@ -973,6 +1096,7 @@ func handleConfigEndpoint(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
+		claudeStatusCache.at = time.Time{}
 		go checkProviderStatus()
 		log.Printf("Config updated — provider: %s", cfg.Provider)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "provider": cfg.Provider})
@@ -1115,12 +1239,28 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-g
   <div class="panel-title">LLM Provider</div>
   <div class="tabs">
     <button class="tab" data-p="player2" onclick="selTab('player2')">🎮 Player2</button>
+    <button class="tab" data-p="claude_code" onclick="selTab('claude_code')">Claude Code</button>
+    <button class="tab" data-p="anthropic" onclick="selTab('anthropic')">Anthropic API</button>
     <button class="tab" data-p="openai" onclick="selTab('openai')">OpenAI</button>
     <button class="tab" data-p="openrouter" onclick="selTab('openrouter')">OpenRouter</button>
     <button class="tab" data-p="gemini" onclick="selTab('gemini')">Gemini</button>
     <button class="tab" data-p="custom" onclick="selTab('custom')">⚙️ Custom</button>
   </div>
 
+  <div class="ppanel" id="pp-claude_code">
+    <div class="info">Runs the <strong>claude</strong> CLI locally, so dwarves use your Claude subscription. Log in once in a terminal with <strong>claude auth login</strong>. No API key needed.</div>
+    <div class="row2">
+      <div class="fg"><label>Model</label><input type="text" id="cc-model" placeholder="haiku"><div class="hint">haiku (fastest), sonnet, opus, or a full model ID</div></div>
+      <div class="fg"><label>claude binary (optional)</label><input type="text" id="cc-path" placeholder="auto-detect"><div class="hint" id="cc-found"></div></div>
+    </div>
+  </div>
+  <div class="ppanel" id="pp-anthropic">
+    <div class="info">Anthropic API with a pay-as-you-go key from <strong>console.anthropic.com</strong>. Falls back to the ANTHROPIC_API_KEY environment variable.</div>
+    <div class="row2">
+      <div class="fg"><label>API Key</label><input type="password" id="ant-key" placeholder="sk-ant-..."><div class="khint" id="ant-khint"></div></div>
+      <div class="fg"><label>Model</label><input type="text" id="ant-model" placeholder="claude-haiku-5-5"><div class="hint">Default: claude-haiku-5-5</div></div>
+    </div>
+  </div>
   <div class="ppanel" id="pp-player2">
     <div class="info">Player2 uses the local app (port 4315) if running, or the Web API with the OAuth key generated above. No additional configuration needed.</div>
   </div>
@@ -1292,6 +1432,8 @@ function showSave(ok, msg) {
 
 function saveConfig() {
   const p = {provider: activeTab};
+  if (activeTab==='claude_code') { p.model=document.getElementById('cc-model').value.trim(); p.claude_path=document.getElementById('cc-path').value.trim(); }
+  if (activeTab==='anthropic')   { const k=document.getElementById('ant-key').value.trim(); if(k) p.anthropic_key=k; p.model=document.getElementById('ant-model').value.trim(); }
   if (activeTab==='openai')      { const k=document.getElementById('oai-key').value.trim(); if(k) p.openai_key=k; p.model=document.getElementById('oai-model').value.trim(); }
   if (activeTab==='openrouter')  { const k=document.getElementById('or-key').value.trim();  if(k) p.openrouter_key=k; p.model=document.getElementById('or-model').value.trim(); }
   if (activeTab==='gemini')      { const k=document.getElementById('gem-key').value.trim(); if(k) p.gemini_key=k; p.model=document.getElementById('gem-model').value.trim(); }
@@ -1308,12 +1450,17 @@ function saveConfig() {
 function loadConfig() {
   fetch('/api/config').then(r=>r.json()).then(d=>{
     selTab(d.provider||'player2');
+    if(d.anthropic_key_hint)  document.getElementById('ant-khint').textContent  = 'Saved: '+d.anthropic_key_hint;
+    document.getElementById('cc-path').value = d.claude_path||'';
+    document.getElementById('cc-found').textContent = d.claude_path_found ? 'Using: '+d.claude_path_found : 'claude CLI not found';
     if(d.openai_key_hint)     document.getElementById('oai-khint').textContent  = 'Saved: '+d.openai_key_hint;
     if(d.openrouter_key_hint) document.getElementById('or-khint').textContent   = 'Saved: '+d.openrouter_key_hint;
     if(d.gemini_key_hint)     document.getElementById('gem-khint').textContent  = 'Saved: '+d.gemini_key_hint;
     if(d.custom_key_hint)     document.getElementById('cu-khint').textContent   = 'Saved: '+d.custom_key_hint;
     if(d.custom_url)          document.getElementById('cu-url').value = d.custom_url;
     const m = d.model||'';
+    if(d.provider==='claude_code') document.getElementById('cc-model').value = m;
+    if(d.provider==='anthropic')   document.getElementById('ant-model').value = m;
     if(d.provider==='openai')     document.getElementById('oai-model').value = m;
     if(d.provider==='openrouter') document.getElementById('or-model').value  = m;
     if(d.provider==='gemini')     document.getElementById('gem-model').value = m;
