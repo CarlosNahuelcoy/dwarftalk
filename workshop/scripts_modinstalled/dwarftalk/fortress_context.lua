@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/fortress_context
@@ -22,7 +29,7 @@ local context = {}
 -- Configuration
 local CACHE_TTL = 30 -- Cache valid for 30 seconds
 local saves_dir = dfhack.getDFPath() .. '/dwarftalk_saves/'
-local context_cache_path = saves_dir .. 'fortress_context.json'
+dfhack.filesystem.mkdir_recursive(saves_dir)
 
 -- Safe field access helper
 local function safe_get(obj, ...)
@@ -60,10 +67,7 @@ function context.get_recent_deaths(days)
                 local death_time = death_event.event_year * 403200 + death_event.event_time
                 
                 if death_time >= cutoff_time then
-                    local name = "Unknown Dwarf"
-                    if unit.name and unit.name.has_name and unit.name.first_name ~= '' then
-                        name = unit.name.first_name
-                    end
+                    local name = require('names').unit_name(unit, "Unknown Dwarf")
                     
                     local profession = "Dwarf"
                     local prof_ok, prof = pcall(dfhack.units.getProfessionName, unit)
@@ -294,7 +298,7 @@ function context.save_context_to_json(ctx)
     
     local json_data = json.encode(ctx)
     
-    local f = io.open(context_cache_path, 'w')
+    local f = io.open(require('world_paths').file('fortress_context.json'), 'w')
     if not f then return false end
     
     f:write(json_data)
@@ -310,7 +314,7 @@ end
 function context.load_context_from_json()
     if not json then return nil end
     
-    local f = io.open(context_cache_path, 'r')
+    local f = io.open(require('world_paths').file('fortress_context.json'), 'r')
     if not f then return nil end
     
     local json_data = f:read('*all')

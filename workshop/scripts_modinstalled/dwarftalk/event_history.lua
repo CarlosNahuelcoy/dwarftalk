@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/event_history
@@ -14,7 +21,7 @@ local widgets = require('gui.widgets')
 -- EventHistoryWindow
 -- ============================================================================
 
-EventHistoryWindow = defclass(EventHistoryWindow, gui.Screen)
+EventHistoryWindow = defclass(EventHistoryWindow, gui.ZScreen)
 EventHistoryWindow.ATTRS = {
     focus_path = 'dwarftalk_event_history',
 }
@@ -58,7 +65,6 @@ function EventHistoryWindow:init()
                     view_id = 'event_list',
                     frame = {l = 1, t = 5, r = 1, b = 3},
                     text = narrative,
-                    text_wrap = true,
                 },
                 
                 -- Separator

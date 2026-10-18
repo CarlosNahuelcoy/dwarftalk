@@ -2,16 +2,17 @@
 # DwarfTalk - AI-powered dwarf conversations
 # ============================================================================
 # Start systems on map load (fort mode)
-on-new-fortress dwarftalk/init
 dwarftalk/init
-# Daemon check - monitors bridge connection
-repeat start dwarftalk_autostart 250 ticks dwarftalk/daemon_check
+# Daemon check - restarts the notification daemon if it stopped
+repeat --name dwarftalk_autostart --time 250 --timeUnits ticks --command [ dwarftalk/daemon_check ]
 # ============================================================================
 # KEYBINDINGS
 # ============================================================================
 # NOTE: Keybindings must be added to dfhack-config/init/dfhack.init
 # Add these lines to your dfhack.init file:
 #
-# keybinding add Ctrl-T dwarftalk/chat_window
-# keybinding add Ctrl-Shift-S dwarftalk/settings_window
+# keybinding add Ctrl-T@dwarfmode dwarftalk/chat_window
+# keybinding add Alt-Shift-S@dwarfmode dwarftalk/settings_window
+#
+# (Ctrl-Shift-S is DFHack's default "spectate toggle", so it is not used here.)
 # ============================================================================

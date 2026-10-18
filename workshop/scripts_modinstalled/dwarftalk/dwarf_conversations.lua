@@ -1,11 +1,18 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 
 local conversations = {}
 local analyzer = require('analyze_dwarf')
 
 -- Guardar conversación en archivo de historial
 function conversations.save_to_history(name1, name2, dialogue, timestamp, effects)
-    local history_file = dfhack.getDFPath() .. '/dwarftalk_temp/npc_conversations.json'
+    local history_file = require('world_paths').file('npc_conversations.json')
     
     -- Cargar historial existente
     local history = {}
@@ -47,7 +54,7 @@ end
 
 -- Cargar historial
 function conversations.load_history()
-    local history_file = dfhack.getDFPath() .. '/dwarftalk_temp/npc_conversations.json'
+    local history_file = require('world_paths').file('npc_conversations.json')
     
     local f = io.open(history_file, 'r')
     if not f then return {} end
@@ -102,20 +109,7 @@ end
 
 -- Obtener nombre limpio
 function conversations.get_clean_name(unit)
-    local name = ''
-    if unit.name.has_name then
-        if unit.name.first_name ~= '' then
-            name = unit.name.first_name
-        end
-        if unit.name.nickname ~= '' then
-            if name ~= '' then name = name .. ' "' else name = '"' end
-            name = name .. unit.name.nickname .. '"'
-        end
-    end
-    
-    if name == '' then
-        name = 'Unnamed #' .. tostring(unit.id)
-    end
+    local name = require('names').unit_name(unit, 'Unnamed #' .. tostring(unit.id))
     
     -- Sanitizar caracteres especiales
     return name:gsub("[^\32-\126]", "")

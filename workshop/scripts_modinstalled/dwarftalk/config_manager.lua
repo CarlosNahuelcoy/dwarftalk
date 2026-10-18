@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/config_manager
@@ -20,6 +27,7 @@ local config = {}
 
 local saves_dir = dfhack.getDFPath() .. '/dwarftalk_saves/'
 local config_path = saves_dir .. 'config.json'
+dfhack.filesystem.mkdir_recursive(saves_dir)
 
 -- Default configuration
 local DEFAULT_CONFIG = {

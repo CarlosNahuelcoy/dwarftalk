@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/persistence
@@ -53,13 +60,13 @@ end
 
 -- Ensure save directory exists
 local function ensure_save_dir()
-    dfhack.run_command_silent('mkdir "' .. save_dir:gsub('/', '\\') .. '" 2>nul')
+    dfhack.filesystem.mkdir_recursive(save_dir)
 end
 
 ensure_save_dir()
 
 function persistence.get_save_path(dwarf_id)
-    return save_dir .. 'conversation_' .. tostring(dwarf_id) .. '.json'
+    return require('world_paths').file('conversation_' .. tostring(dwarf_id) .. '.json')
 end
 
 function persistence.save_conversation(dwarf_id, chat_messages, conversation_history)

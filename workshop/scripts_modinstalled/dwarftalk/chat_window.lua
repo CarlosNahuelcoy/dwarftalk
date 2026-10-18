@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/chat_window
@@ -127,20 +134,7 @@ end
 function dwarf_data.get_dwarf_info(unit)
     if not unit then return nil end
     
-    local name = ''
-    if unit.name.has_name then
-        if unit.name.first_name ~= '' then
-            name = unit.name.first_name
-        end
-        if unit.name.nickname ~= '' then
-            if name ~= '' then name = name .. ' "' else name = '"' end
-            name = name .. unit.name.nickname .. '"'
-        end
-    end
-    
-    if name == '' then
-        name = 'Unnamed Dwarf #' .. tostring(unit.id)
-    end
+    local name = require('names').unit_name(unit)
     
     local profession = dfhack.units.getProfessionName(unit)
     if not profession or profession == '' then
@@ -335,7 +329,7 @@ end
 -- ChatWindow - Main window
 -- ============================================================================
 
-ChatWindow = defclass(ChatWindow, gui.Screen)
+ChatWindow = defclass(ChatWindow, gui.ZScreen)
 ChatWindow.ATTRS = {
     focus_path = 'dwarftalk_chat',
     preselected_dwarf = DEFAULT_NIL,
@@ -415,27 +409,26 @@ function ChatWindow:init()
                     text_pen = COLOR_GRAY,
                 },
                 
-                -- SEPARATOR
+                -- SEPARATOR (long enough for any width; the frame clips it)
                 widgets.Label{
                     frame = {l = 30, t = 2, r = 1, h = 1},
-                    text = string.rep('-', 50),
+                    text = string.rep('-', 300),
                     text_pen = COLOR_DARKGRAY,
                 },
                 
-                -- CHAT HISTORY
-                widgets.Label{
+                -- CHAT HISTORY (re-wraps to the window width, grows when resized)
+                widgets.WrappedLabel{
                     view_id = 'chat_history',
-                    frame = {l = 30, t = 3, r = 1, h = 22},
-                    text = '',
+                    frame = {l = 30, t = 3, r = 1, b = 6},
+                    text_to_wrap = '',
                     text_pen = COLOR_WHITE,
                     auto_height = false,
-                    text_wrap = true,
                 },
                 
                 -- Separator above input
                 widgets.Label{
-                    frame = {l = 30, b = 5, r = 1},
-                    text = string.rep('-', 50),
+                    frame = {l = 30, b = 5, r = 1, h = 1},
+                    text = string.rep('-', 300),
                     text_pen = COLOR_DARKGRAY,
                 },
                 
@@ -491,8 +484,8 @@ function ChatWindow:init()
                     view_id = 'clear_chat_btn',
                     frame = {l = 30, b = 1, w = 15},
                     label = 'Clear Chat',
-                    key = 'CUSTOM_C',
-                    on_activate = self:callback('clear_current_chat'),
+                    key = 'CUSTOM_SHIFT_C',
+                    on_activate = self:callback('confirm_clear_chat'),
                     auto_width = false,
                     enabled = false,
                 },
@@ -540,7 +533,7 @@ function ChatWindow:refresh_dwarf_list()
         local display_text = dwarf.name .. ' - ' .. dwarf.profession
         
         if persistence.has_conversation(dwarf.id) then
-            display_text = display_text .. ' 💬'
+            display_text = display_text .. ' *'
         end
         
         table.insert(choices, {
@@ -648,8 +641,12 @@ function ChatWindow:load_chat_history(dwarf)
     if saved_messages and saved_history then
         logger.log("LOAD", "Found saved conversation - restoring")
         
-        -- Restore saved conversation
-        self.chat_messages = saved_messages
+        -- Restore saved conversation. Older saves were hard-wrapped at 48
+        -- columns; join those lines so the label can re-wrap to the window.
+        self.chat_messages = {}
+        for i, m in ipairs(saved_messages) do
+            self.chat_messages[i] = (m:gsub('\n', ' '))
+        end
         self.conversation_history = saved_history
         self:update_chat_display()
         
@@ -715,6 +712,16 @@ function ChatWindow:save_current_conversation()
     end
 end
 
+-- Clearing deletes the save file, so never do it on a single stray keypress
+function ChatWindow:confirm_clear_chat()
+    if not self.selected_dwarf then return end
+    require('gui.dialogs').showYesNoPrompt(
+        'Clear Chat',
+        'Delete your whole conversation with ' .. self.selected_dwarf.name .. '?\nThis cannot be undone.',
+        COLOR_YELLOW,
+        self:callback('clear_current_chat'))
+end
+
 function ChatWindow:clear_current_chat()
     if not self.selected_dwarf then return end
     
@@ -730,40 +737,18 @@ function ChatWindow:clear_current_chat()
 end
 
 function ChatWindow:add_message(speaker, text)
-    local max_width = 48
-    local wrapped = self:wrap_text(text, max_width)
-    
-    table.insert(self.chat_messages, speaker .. ': ' .. wrapped)
+    table.insert(self.chat_messages, speaker .. ': ' .. text)
     self:update_chat_display()
 end
 
-function ChatWindow:wrap_text(text, max_width)
-    local lines = {}
-    local current_line = ""
-    
-    for word in text:gmatch("%S+") do
-        local test_line = current_line == "" and word or current_line .. " " .. word
-        
-        if #test_line <= max_width then
-            current_line = test_line
-        else
-            if current_line ~= "" then
-                table.insert(lines, current_line)
-            end
-            current_line = word
-        end
-    end
-    
-    if current_line ~= "" then
-        table.insert(lines, current_line)
-    end
-    
-    return table.concat(lines, '\n')
-end
-
 function ChatWindow:update_chat_display()
-    local display_text = table.concat(self.chat_messages, '\n\n')
-    self.subviews.chat_history:setText(display_text)
+    local label = self.subviews.chat_history
+    label.text_to_wrap = table.concat(self.chat_messages, '\n\n')
+    -- Re-wrap now if the window has been laid out; otherwise the first layout does it
+    if label.frame_parent_rect then
+        label:updateLayout()
+        label:scroll('end')
+    end
 end
 
 function ChatWindow:on_input_change(text)
@@ -772,7 +757,7 @@ end
 
 function ChatWindow:send_message()
     if not self.selected_dwarf then 
-        self:set_status('✗ Select a dwarf first', COLOR_RED)
+        self:set_status('x Select a dwarf first', COLOR_RED)
         return 
     end
     
@@ -780,14 +765,14 @@ function ChatWindow:send_message()
     if msg == '' then return end
     
     if not player2_api then
-        self:add_message('ERROR', '⚠ Cannot send: Player2 API not loaded')
-        self:set_status('✗ API Error', COLOR_RED)
+        self:add_message('ERROR', '! Cannot send: Player2 API not loaded')
+        self:set_status('x API Error', COLOR_RED)
         return
     end
     
     self:add_message('You', msg)
     self.subviews.input_field:setText('')
-    self:set_status('⏳ AI is thinking...', COLOR_YELLOW)
+    self:set_status('AI is thinking...', COLOR_YELLOW)
     self:send_ai_message(msg)
 end
 
@@ -808,8 +793,8 @@ function ChatWindow:send_ai_message(user_msg)
     end
     
     if not ok then
-        self:add_message('ERROR', '⚠ Failed to build prompt: ' .. tostring(system_prompt))
-        self:set_status('✗ Prompt Error', COLOR_RED)
+        self:add_message('ERROR', '! Failed to build prompt: ' .. tostring(system_prompt))
+        self:set_status('x Prompt Error', COLOR_RED)
         return
     end
     
@@ -888,11 +873,11 @@ function ChatWindow:send_ai_message(user_msg)
                 self:save_current_conversation()
                 logger.log("CALLBACK", "Conversation save completed")
                 
-                self:set_status('✓ Ready', COLOR_GREEN)
+                self:set_status('Ready', COLOR_GREEN)
             else
                 logger.log("CALLBACK", "ERROR: " .. tostring(response))
-                self:add_message('ERROR', '⚠ Failed to get response from AI')
-                self:set_status('✗ Error', COLOR_RED)
+                self:add_message('ERROR', '! Failed to get response from AI')
+                self:set_status('x Error', COLOR_RED)
             end
         end
     )

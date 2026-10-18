@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/message_generator
@@ -79,20 +86,7 @@ end
 function generator.generate_message(unit, callback)
     -- Get dwarf info
     local function get_dwarf_name(u)
-        local name = "Unknown Dwarf"
-        if u.name.has_name then
-            if u.name.first_name ~= '' then
-                name = u.name.first_name
-            end
-            if u.name.nickname ~= '' then
-                if name ~= "Unknown Dwarf" then
-                    name = name .. ' "' .. u.name.nickname .. '"'
-                else
-                    name = '"' .. u.name.nickname .. '"'
-                end
-            end
-        end
-        return name
+        return require('names').unit_name(u, "Unknown Dwarf")
     end
     
     local dwarf_info = {

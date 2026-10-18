@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/notification_popup
@@ -17,7 +24,7 @@ local logger = require('logger')
 -- NotificationPopup
 -- ============================================================================
 
-NotificationPopup = defclass(NotificationPopup, gui.Screen)
+NotificationPopup = defclass(NotificationPopup, gui.ZScreen)
 NotificationPopup.ATTRS = {
     focus_path = 'dwarftalk_notification',
     message_data = DEFAULT_NIL,
@@ -61,7 +68,6 @@ function NotificationPopup:init()
                 widgets.Label{
                     frame = {l = 2, t = 4, r = 2, h = 6},
                     text = {{text = '"' .. wrapped_message .. '"', pen = COLOR_YELLOW}},
-                    text_wrap = true,
                 },
                 
                 -- Info

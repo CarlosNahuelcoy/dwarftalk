@@ -1,3 +1,10 @@
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 local daemon = require('notification_daemon')
 local monitor = require('npc_conversation_monitor')
 local config_manager = require('config_manager')
@@ -31,4 +38,6 @@ print("  - Check Interval: " .. (cfg.notification_interval_minutes or 5) .. " mi
 print("  - Message Chance: " .. (cfg.notification_chance_percent or 20) .. "%")
 print("NPC Conversations: " .. tostring(cfg.npc_conversations_enabled))
 print("  - NPC Interval: " .. (cfg.npc_interval_minutes or 20) .. " minutes")
+print("========================================")print("Bridge folder: " .. dfhack.getDFPath() .. "/dwarftalk_temp/")
+print("  (the bridge must watch this folder; see its startup log)")
 print("========================================")

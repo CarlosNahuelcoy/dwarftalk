@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 
 local conversations = require('dwarf_conversations')
 local player2_api = require('player2_api')
@@ -165,7 +172,7 @@ function monitor.try_generate_conversation()
         })
         
         dfhack.gui.showAnnouncement(
-            "💬 " .. name1 .. " & " .. name2 .. " had a conversation",
+            "" .. name1 .. " & " .. name2 .. " had a conversation",
             COLOR_CYAN,
             false
         )

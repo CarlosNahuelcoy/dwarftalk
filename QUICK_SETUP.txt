@@ -33,8 +33,8 @@ STEP 3: ADD KEYBINDINGS (IMPORTANT!)
 → Open: Dwarf Fortress/dfhack-config/init/dfhack.init
 → Add at the end:
 
-  keybinding add Ctrl-T dwarftalk/chat_window
-  keybinding add Ctrl-Shift-S dwarftalk/settings_window
+  keybinding add Ctrl-T@dwarfmode dwarftalk/chat_window
+  keybinding add Alt-Shift-S@dwarfmode dwarftalk/settings_window
 
 → Save and close
 
@@ -62,7 +62,7 @@ CHAT WITH DWARF:
   4. See their response!
 
 SETTINGS:
-  Press Ctrl+Shift+S
+  Press Alt+Shift+S
 
 CHECK STATUS:
   DFHack console: dwarftalk/status
