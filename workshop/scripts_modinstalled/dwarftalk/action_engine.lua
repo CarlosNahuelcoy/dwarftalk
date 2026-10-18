@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 
 local action_engine = {}
 local logger = require('debug_logger')
@@ -69,7 +76,9 @@ function action_engine.adjust_mood(dwarf_info, action)
     local unit = dwarf_info.unit
     if not unit then return nil end
     
-    local change = action.amount or 0
+    local change = tonumber(action.amount) or 0
+    -- A neutral reply changes nothing, so it gets no narrative line either
+    if change == 0 then return nil end
     
     if not unit.status then return nil end
     if not unit.status.current_soul then return nil end

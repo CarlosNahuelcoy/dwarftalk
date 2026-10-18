@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/dwarf_prompt_editor
@@ -15,7 +22,7 @@ local config_manager = require('config_manager')
 -- DwarfPromptEditor
 -- ============================================================================
 
-DwarfPromptEditor = defclass(DwarfPromptEditor, gui.Screen)
+DwarfPromptEditor = defclass(DwarfPromptEditor, gui.ZScreen)
 DwarfPromptEditor.ATTRS = {
     focus_path = 'dwarftalk_dwarf_prompt',
     dwarf_info = DEFAULT_NIL,

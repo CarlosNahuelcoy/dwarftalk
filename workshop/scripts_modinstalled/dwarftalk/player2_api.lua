@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 
 local json = nil
 for _, lib in ipairs({'json', 'dkjson', 'cjson'}) do
@@ -15,6 +22,23 @@ local df_path = dfhack.getDFPath()
 local temp_dir = df_path .. '/dwarftalk_temp/'
 local request_file = temp_dir .. 'request.json'
 local response_file = temp_dir .. 'response.json'
+
+dfhack.filesystem.mkdir_recursive(temp_dir)
+
+-- Wall-clock seconds to wait for the bridge. Frame-count timeouts depend on FPS,
+-- and a CLI-backed model can take a while on long prompts.
+local RESPONSE_TIMEOUT_SECONDS = 150
+
+-- Write via tmp + rename so the bridge never reads a half-written request.
+local function write_atomic(path, data)
+    local tmp = path .. '.tmp'
+    local f = io.open(tmp, 'w')
+    if not f then return false end
+    f:write(data)
+    f:close()
+    os.remove(path)
+    return os.rename(tmp, path)
+end
 
 player2_api.MAX_RETRIES = 3
 player2_api.DEBUG = false
@@ -69,24 +93,23 @@ local function make_request(command, messages, callback)
     logger.log("API", "Deleted old response file")
     
     -- Write request
-    local f = io.open(request_file, 'w')
-    if not f then
+    if not write_atomic(request_file, json.encode(request)) then
         logger.log("API", "ERROR: Could not write request")
         callback(nil, "Could not write request")
         return
     end
-    f:write(json.encode(request))
-    f:close()
     
     logger.log("API", "Request written, starting poll...")
     
     local poll_count = 0
-    local max_polls = 300  -- 300 frames ≈ 30 segundos a 10 FPS
+    local deadline = os.time() + RESPONSE_TIMEOUT_SECONDS
 
     local function poll()
         poll_count = poll_count + 1
         
-        logger.log("API", "Poll attempt " .. poll_count .. "/" .. max_polls)
+        if poll_count % 50 == 0 then
+            logger.log("API", "Still waiting for bridge (poll " .. poll_count .. ")")
+        end
         
         local f = io.open(response_file, 'r')
         if f then
@@ -113,13 +136,11 @@ local function make_request(command, messages, callback)
             else
                 logger.log("API", "Response file empty")
             end
-        else
-            logger.log("API", "Response file not found yet")
         end
         
-        if poll_count >= max_polls then
+        if os.time() >= deadline then
             logger.log("API", "ERROR: Timeout reached")
-            callback(nil, "Timeout - is dwarftalk_bridge.exe running?")
+            callback(nil, "Timeout - is the dwarftalk bridge running?")
             return
         end
         
@@ -316,19 +337,16 @@ function player2_api.generate_npc_conversation(prompt, callback)
     logger.log("NPC_API", "Using separate NPC files")
     
     -- Escribir request
-    local f = io.open(npc_request_file, 'w')
-    if not f then
+    if not write_atomic(npc_request_file, json.encode(request)) then
         callback(false, nil)
         return
     end
-    f:write(json.encode(request))
-    f:close()
     
     logger.log("NPC_API", "Request written to npc_request.json")
     
     -- Poll para respuesta
     local poll_count = 0
-    local max_polls = 300
+    local deadline = os.time() + RESPONSE_TIMEOUT_SECONDS
     
     local function poll()
         poll_count = poll_count + 1
@@ -372,7 +390,7 @@ function player2_api.generate_npc_conversation(prompt, callback)
             end
         end
         
-        if poll_count >= max_polls then
+        if os.time() >= deadline then
             logger.log("NPC_API", "Timeout")
             callback(false, nil)
             return

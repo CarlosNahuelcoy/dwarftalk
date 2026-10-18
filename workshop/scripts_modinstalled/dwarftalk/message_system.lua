@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/message_system
@@ -19,15 +26,9 @@ end
 local messages = {}
 
 local saves_dir = dfhack.getDFPath() .. '/dwarftalk_saves/'
-local messages_dir = saves_dir .. 'messages/'
-local pending_path = messages_dir .. 'pending.json'
-
--- Ensure messages directory exists
-local function ensure_messages_dir()
-    dfhack.run_command_silent('mkdir "' .. messages_dir:gsub('/', '\\') .. '" 2>nul')
+local function pending_path()
+    return require('world_paths').file('pending_messages.json')
 end
-
-ensure_messages_dir()
 
 -- ============================================================================
 -- SANITIZE FOR JSON (convert all values to JSON-safe types)
@@ -66,7 +67,7 @@ end
 function messages.load_pending()
     if not json then return {} end
     
-    local f = io.open(pending_path, 'r')
+    local f = io.open(pending_path(), 'r')
     if not f then return {} end
     
     local json_data = f:read('*all')
@@ -92,7 +93,7 @@ function messages.save_pending(pending_list)
     
     local json_data = json.encode(safe_list)
     
-    local f = io.open(pending_path, 'w')
+    local f = io.open(pending_path(), 'w')
     if not f then return false end
     
     f:write(json_data)

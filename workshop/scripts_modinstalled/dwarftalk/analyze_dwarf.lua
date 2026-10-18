@@ -1,4 +1,11 @@
 --@module = true
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 --[=====[
 
 dwarftalk/analyze_dwarf
@@ -46,22 +53,7 @@ end
 -- ============================================================================
 
 function analyzer.get_name(unit)
-    local name = ''
-    if unit.name.has_name then
-        if unit.name.first_name ~= '' then
-            name = unit.name.first_name
-        end
-        if unit.name.nickname ~= '' then
-            if name ~= '' then name = name .. ' "' else name = '"' end
-            name = name .. unit.name.nickname .. '"'
-        end
-    end
-    
-    if name == '' then
-        name = 'Unnamed Dwarf #' .. tostring(unit.id)
-    end
-    
-    return name
+    return require('names').unit_name(unit)
 end
 
 -- ============================================================================
@@ -870,7 +862,7 @@ end
 
 function analyzer.save_analysis(analysis, filename)
     local output_dir = dfhack.getDFPath() .. '/dwarftalk_analysis/'
-    dfhack.run_command_silent('mkdir "' .. output_dir:gsub('/', '\\') .. '" 2>nul')
+    dfhack.filesystem.mkdir_recursive(output_dir)
     
     local filepath = output_dir .. filename
     local f = io.open(filepath, 'w')

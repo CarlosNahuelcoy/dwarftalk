@@ -1,9 +1,16 @@
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 -- Ventana de historial de conversaciones NPC
 local gui = require('gui')
 local widgets = require('gui.widgets')
 local conversations = require('dwarf_conversations')
 
-NPCHistoryWindow = defclass(NPCHistoryWindow, gui.Screen)
+NPCHistoryWindow = defclass(NPCHistoryWindow, gui.ZScreen)
 NPCHistoryWindow.ATTRS = {
     focus_path = 'dwarftalk_npc_history',
 }

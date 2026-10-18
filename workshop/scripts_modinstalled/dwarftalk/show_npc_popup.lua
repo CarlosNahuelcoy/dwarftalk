@@ -1,7 +1,14 @@
+-- Make sibling DwarfTalk modules require()-able no matter which script runs first
+do
+    local dir = debug.getinfo(1, 'S').source:match('^@(.+)[/\\][^/\\]+$')
+    if dir and not package.path:find(dir .. '/?.lua', 1, true) then
+        package.path = package.path .. ';' .. dir .. '/?.lua'
+    end
+end
 local gui = require('gui')
 local widgets = require('gui.widgets')
 
-NPCPopup = defclass(NPCPopup, gui.Screen)
+NPCPopup = defclass(NPCPopup, gui.ZScreen)
 NPCPopup.ATTRS = {
     focus_path = 'dwarftalk_npc_popup',
 }
@@ -34,12 +41,11 @@ function NPCPopup:init()
             frame_title = 'Conversation: ' .. pending.name1 .. ' & ' .. pending.name2,
             resizable = true,
             subviews = {
-                widgets.Label{
+                widgets.WrappedLabel{
                     frame = {l = 1, t = 1, r = 1, b = 3},
-                    text = content,
+                    text_to_wrap = content,
                     text_pen = COLOR_WHITE,
                     auto_height = false,
-                    text_wrap = true,
                 },
                 widgets.HotkeyLabel{
                     frame = {l = 1, b = 0},
